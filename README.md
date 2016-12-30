@@ -15,3 +15,8 @@ ux0:tai/oclockvita.suprx
 ```
 
 After that just run the game and press SELECT + UP to enable menu. Press SELECT + DOWN to close menu.
+
+Thanks to: 
+
+https://github.com/Scorpeg
+https://github.com/BeatPlay/BetterAmphetaminPlugin
