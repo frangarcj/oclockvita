@@ -8,27 +8,30 @@
 #include <taihen.h>
 #include "blit.h"
 
-#define LEFT_LABEL_X CENTER(18)
+#define LEFT_LABEL_X CENTER(24)
 #define RIGHT_LABEL_X CENTER(0)
 
-static SceUID g_hooks[5];
+static SceUID g_hooks[9];
 int showMenu = 0;
-int mode = 0;
+int mode = -1;
 
 static int profile_max_battery[] = {111, 111, 111, 111};
 static int profile_default[] = {266, 166, 166, 111};
 static int profile_max_performance[] = {444, 222, 222, 166};
 static int profile_game[] = {444, 222, 222, 166};
 static int* profiles[4] = {profile_game,profile_default,profile_max_performance,profile_max_battery};
+static uint32_t old_buttons, pressed_buttons;
+
+
 
 static tai_hook_ref_t ref_hook0;
 int sceDisplaySetFrameBuf_patched(const SceDisplayFrameBuf *pParam, int sync) {
     blit_set_frame_buf(pParam);
     if(showMenu){
-      blit_set_color(0x00FFFFFF, 0x0033CC33);
+      blit_set_color(0x00FFFFFF, 0x00FF0000);
 			blit_stringf(LEFT_LABEL_X, 88, "SIMPLE OVERCLOCK");
 
-			blit_set_color(0x00FFFFFF, 0x0033CC33);
+			blit_set_color(0x00FFFFFF, 0x00FF0000);
 			blit_stringf(LEFT_LABEL_X, 120, "PROFILE    ");
 
 			switch(mode) {
@@ -66,17 +69,18 @@ int checkButtons(int port, tai_hook_ref_t ref_hook, SceCtrlData *ctrl, int count
      ret = 1;
   else
   {
-    ret = TAI_CONTINUE(int, ref_hook, port, ctrl, count);     
-          
+    ret = TAI_CONTINUE(int, ref_hook, port, ctrl, count);
+
     if(showMenu){
+      pressed_buttons = ctrl->buttons & ~old_buttons;
       
-      if (mode > 0 && (ctrl->buttons & SCE_CTRL_LEFT)){
+      if (mode > 0 && (pressed_buttons & SCE_CTRL_LEFT)){
         mode--;
         scePowerSetArmClockFrequency(profiles[mode][0]);
         scePowerSetBusClockFrequency(profiles[mode][1]);
 	      scePowerSetGpuClockFrequency(profiles[mode][2]);
         scePowerSetGpuXbarClockFrequency(profiles[mode][3]);
-      }else if (mode <3 && (ctrl->buttons & SCE_CTRL_RIGHT)){
+      }else if (mode <3 && (pressed_buttons & SCE_CTRL_RIGHT)){
         mode++;
         scePowerSetArmClockFrequency(profiles[mode][0]);
         scePowerSetBusClockFrequency(profiles[mode][1]);
@@ -86,16 +90,18 @@ int checkButtons(int port, tai_hook_ref_t ref_hook, SceCtrlData *ctrl, int count
         showMenu = 0;
       }
 
+      old_buttons = ctrl->buttons;
       ctrl->buttons = 0;
        
      }else{
        
        if ((ctrl->buttons & SCE_CTRL_SELECT) && (ctrl->buttons & SCE_CTRL_UP)){         
-         if(mode==0){
+         if(mode==-1){
             profile_game[0] = scePowerGetArmClockFrequency();
           	profile_game[1] = scePowerGetBusClockFrequency();
           	profile_game[2] = scePowerGetGpuClockFrequency();
           	profile_game[3] = scePowerGetGpuXbarClockFrequency();
+            mode=0;
          }
          showMenu = 1;
        }
@@ -106,6 +112,14 @@ int checkButtons(int port, tai_hook_ref_t ref_hook, SceCtrlData *ctrl, int count
 
   return ret;
 }
+
+int scePowerSetClockFrequency_patched(tai_hook_ref_t ref_hook, int port, int freq){
+  if(mode==-1)
+    return TAI_CONTINUE(int, ref_hook, freq);
+  else
+    return TAI_CONTINUE(int, ref_hook, profiles[mode][port]);
+}
+
 
 static tai_hook_ref_t ref_hook1;
 static int keys_patched1(int port, SceCtrlData *ctrl, int count) {
@@ -126,6 +140,26 @@ static tai_hook_ref_t ref_hook4;
 static int keys_patched4(int port, SceCtrlData *ctrl, int count) {
     return checkButtons(port, ref_hook4, ctrl, count);
 }   
+
+static tai_hook_ref_t power_hook1;
+static int power_patched1(int freq) {
+    return scePowerSetClockFrequency_patched(power_hook1,0,freq);
+}
+
+static tai_hook_ref_t power_hook2;
+static int power_patched2(int freq) {
+    return scePowerSetClockFrequency_patched(power_hook2,1,freq);
+}
+
+static tai_hook_ref_t power_hook3;
+static int power_patched3(int freq) {
+    return scePowerSetClockFrequency_patched(power_hook3,2,freq);
+}
+
+static tai_hook_ref_t power_hook4;
+static int power_patched4(int freq) {
+    return scePowerSetClockFrequency_patched(power_hook4,3,freq);
+}
 
 void _start() __attribute__ ((weak, alias ("module_start")));
 
@@ -160,6 +194,30 @@ int module_start(SceSize argc, const void *args) {
                                       0xC4226A3E, // sceCtrlReadBufferPositive2
                                       keys_patched4);
 
+  g_hooks[5] = taiHookFunctionImport(&power_hook1, 
+                                      TAI_MAIN_MODULE,
+                                      TAI_ANY_LIBRARY,
+                                      0x74DB5AE5, // scePowerGetArmClockFrequency
+                                      power_patched1);
+
+  g_hooks[6] = taiHookFunctionImport(&power_hook2, 
+                                      TAI_MAIN_MODULE,
+                                      TAI_ANY_LIBRARY,
+                                      0xB8D7B3FB, // scePowerSetBusClockFrequency
+                                      power_patched2);
+
+  g_hooks[7] = taiHookFunctionImport(&power_hook3, 
+                                      TAI_MAIN_MODULE,
+                                      TAI_ANY_LIBRARY,
+                                      0x717DB06C, // scePowerSetGpuClockFrequency
+                                      power_patched3);
+
+  g_hooks[8] = taiHookFunctionImport(&power_hook4, 
+                                      TAI_MAIN_MODULE,
+                                      TAI_ANY_LIBRARY,
+                                      0xA7739DBE, // scePowerSetGpuXbarClockFrequency
+                                      power_patched4);
+
   return SCE_KERNEL_START_SUCCESS;
 }
 
@@ -171,6 +229,10 @@ int module_stop(SceSize argc, const void *args) {
   if (g_hooks[2] >= 0) taiHookRelease(g_hooks[2], ref_hook2);
   if (g_hooks[3] >= 0) taiHookRelease(g_hooks[3], ref_hook3);
   if (g_hooks[4] >= 0) taiHookRelease(g_hooks[4], ref_hook4);
+  if (g_hooks[5] >= 0) taiHookRelease(g_hooks[5], power_hook1);
+  if (g_hooks[6] >= 0) taiHookRelease(g_hooks[6], power_hook2);
+  if (g_hooks[7] >= 0) taiHookRelease(g_hooks[7], power_hook3);
+  if (g_hooks[8] >= 0) taiHookRelease(g_hooks[8], power_hook4);
 
   return SCE_KERNEL_STOP_SUCCESS;
 }
