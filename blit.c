@@ -3,11 +3,7 @@
 */
 #include <psp2/types.h>
 #include <psp2/display.h>
-
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
+#include <psp2/kernel/clib.h>
 
 #include "blit.h"
 
@@ -150,7 +146,7 @@ int blit_string(int sx,int sy,const char *msg)
 
 int blit_string_ctr(int sy,const char *msg)
 {
-	int sx = 960/2-strlen(msg)*(16/2);
+	int sx = 960/2-sceClibStrnlen(msg, 512)*(16/2);
 	return blit_string(sx,sy,msg);
 }
 
@@ -160,7 +156,7 @@ int blit_stringf(int sx, int sy, const char *msg, ...)
 	char string[512];
 
 	va_start(list, msg);
-	vsprintf(string, msg, list);
+	sceClibVsnprintf(string, 512, msg, list);
 	va_end(list);
 
 	return blit_string(sx, sy, string);
