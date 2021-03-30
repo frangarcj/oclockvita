@@ -197,7 +197,7 @@ int module_start(SceSize argc, const void *args) {
   g_hooks[5] = taiHookFunctionImport(&power_hook1, 
                                       TAI_MAIN_MODULE,
                                       TAI_ANY_LIBRARY,
-                                      0x74DB5AE5, // scePowerGetArmClockFrequency
+                                      0x74DB5AE5, // scePowerSetArmClockFrequency
                                       power_patched1);
 
   g_hooks[6] = taiHookFunctionImport(&power_hook2, 
